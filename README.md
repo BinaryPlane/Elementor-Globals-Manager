@@ -1,14 +1,17 @@
-# Globals Manager
+# Elementor Globals Manager
 
-A small WordPress plugin that extracts Elementor global typography and color settings from the active Elementor Kit, then exports them as JSON or CSV.
+A WordPress admin utility for extracting, editing, importing, and exporting Elementor global fonts and colors. The plugin exposes responsive typography values for desktop, tablet, and mobile, and allows you to export the global settings as JSON or CSV.
 
 ## Features
 
-- Adds an admin page under **Globals Manager**
-- Shows responsive typography tokens for desktop, tablet, and mobile
-- Shows global colors with swatches and hex values
-- Exports settings as **JSON** or **CSV**
-- Supports Elementor active kit settings via `elementor_active_kit`
+- Adds an admin page under **Elementor Globals**
+- Displays Elementor global typography and color settings
+- Supports inline editing of global font and color values
+- Exports typography and color data as **JSON** or **CSV**
+- Supports importing JSON back into Elementor globals
+- Loads grouped font lists for `custom`, `system`, and `google` fonts
+- Includes responsive typography support for desktop/tablet/mobile
+- Adds admin CSS and JavaScript for improved inline editing UX
 
 ## Installation
 
@@ -18,20 +21,21 @@ A small WordPress plugin that extracts Elementor global typography and color set
 
 ## Usage
 
-1. In WordPress admin, go to **Globals Manager**.
-2. Switch between the **Typography** and **Colors** tabs.
-3. Click **Export JSON** or **Export CSV** to download the extracted globals.
+1. In WordPress admin, go to **Elementor Globals**.
+2. View and edit global typography and color settings directly in the admin UI.
+3. Use export controls to download the current settings as JSON or CSV.
+4. Use the import feature to restore or apply settings from a JSON file.
 
 ## Export formats
 
-- `JSON`: downloads a structured JSON object containing `fonts` and `colors`
-- `CSV`: downloads a flat table with typography rows first, then colors
+- `JSON`: downloads a structured object of global `fonts` and `colors`
+- `CSV`: downloads a flat table useful for spreadsheets and documentation
 
 ## Notes
 
-- If no Elementor Kit is active, the admin page will show a warning.
-- Only users with `manage_options` can access export functionality.
+- Only users with `manage_options` can access the admin page and export/import features.
+- The plugin reads Elementor font definitions from the active Elementor environment and falls back to Elementor’s font registry or a hardcoded system font list if needed.
 
 ## Source
 
-This plugin is implemented in `globals-manager.php`.
+This plugin is implemented in `bnp-el-globals-manager.php`.
