@@ -1723,4 +1723,25 @@
         openFontModal(btn);
     });
 
+    /* ──────────────────────────────────────────────────
+       PUBLIC API — for addons running on other tabs
+       window.bnpOpenFontById(fontId) opens the preview
+       modal for any typography row that is in the DOM.
+    ────────────────────────────────────────────────── */
+
+    window.bnpOpenFontById = function (fontId) {
+        var chk = document.querySelector('.bnp-row-check[data-type="font"][data-id="' + fontId + '"]');
+        var btn = chk && chk.closest('tr') ? chk.closest('tr').querySelector('.bnp-preview') : null;
+        if (btn) openFontModal(btn);
+    };
+
+    // Auto-open when navigated here via ?bnp_preview_id=ID (e.g. from the Find & Replace addon)
+    (function () {
+        var params = new URLSearchParams(window.location.search);
+        var pid    = params.get('bnp_preview_id');
+        if (!pid) return;
+        // Small delay lets the page finish rendering before opening the modal
+        setTimeout(function () { window.bnpOpenFontById(pid); }, 300);
+    })();
+
 })();
