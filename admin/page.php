@@ -419,7 +419,7 @@ function bnp_render_page() {
                         <label class="bnp-fmp-label">Weight</label>
                         <div class="bnp-fmp-row">
                             <label class="bnp-fmp-row-label" style="color:var(--bnp-text);font-size:11px;">100 – 900</label>
-                            <input type="text" id="bnp-fmp-weight" class="bnp-fmp-input" placeholder="400" spellcheck="false">
+                            <input type="text" id="bnp-fmp-weight" class="bnp-fmp-input" placeholder="400" spellcheck="false" style="grid-column: span 2;">
                             <input type="range" id="bnp-fmp-weight-slider" class="bnp-fmp-slider" min="100" max="900" step="100" value="400">
                         </div>
                     </div>
