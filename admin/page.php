@@ -12,7 +12,7 @@ function bnp_render_page() {
 
     $fonts      = bnp_normalize_fonts(bnp_get_fonts($settings));
     $colors     = bnp_normalize_colors(bnp_get_colors($settings));
-    $active_tab = (isset($_GET['tab']) && $_GET['tab'] === 'colors') ? 'colors' : 'fonts';
+    $active_tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : 'fonts';
     $base_url   = admin_url('admin.php?page=bnp-elementor-globals');
     ?>
 
@@ -85,6 +85,7 @@ function bnp_render_page() {
                 <span class="dashicons dashicons-admin-appearance" style="font-size:15px;width:15px;height:15px;"></span>
                 Colors <span class="bnp-badge"><?php echo count($colors); ?></span>
             </a>
+            <?php do_action('bnp_globals_manager_tabs', $active_tab, $base_url); ?>
             <?php if ($active_tab === 'fonts'): ?>
             <button class="bnp-screen-opts-toggle" id="bnp-screen-opts-btn" type="button">
                 <span class="dashicons dashicons-admin-settings"></span>
@@ -340,6 +341,8 @@ function bnp_render_page() {
                 </div>
             <?php endif; ?>
         <?php endif; ?>
+
+        <?php do_action('bnp_globals_manager_panels', $active_tab); ?>
 
     </div>
 

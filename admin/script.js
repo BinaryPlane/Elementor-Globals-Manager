@@ -7,6 +7,9 @@
 
     var dirty      = {};
     var saveBar    = document.getElementById('bnp-save-bar');
+
+    // Context menu extension registry — addons push { types, icon, label, action(row,type,id,name) } here
+    window.bnpCtxExtensions = window.bnpCtxExtensions || [];
     var saveBtn    = document.getElementById('bnp-save-btn');
     var discardBtn = document.getElementById('bnp-discard-btn');
     var saveStatus = document.getElementById('bnp-save-status');
@@ -1193,6 +1196,20 @@
             danger: true,
             action: function () { deleteSingleRow(type, id, name, row); }
         });
+
+        // Inject items registered by addons (typography finder, color finder, etc.)
+        if (window.bnpCtxExtensions.length) {
+            items.push('sep');
+            window.bnpCtxExtensions.forEach(function(ext) {
+                if (!ext.types || ext.types.indexOf(type) !== -1) {
+                    items.push({
+                        icon: ext.icon,
+                        label: ext.label,
+                        action: (function(e) { return function() { e.action(row, type, id, name); }; })(ext)
+                    });
+                }
+            });
+        }
 
         var menu = buildCtxMenu(items);
         document.body.appendChild(menu);
