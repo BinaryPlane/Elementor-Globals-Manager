@@ -435,13 +435,16 @@ function bnp_render_page() {
                             </button>
                         </div>
                         <?php
+                        // units: first entry is the default unit; '' = unitless (for line-height)
                         $bp_field_cfg = [
-                            'size'           => ['label' => 'Size',           'min' => 8,   'max' => 120, 'step' => 1    ],
-                            'line_height'    => ['label' => 'Line Height',    'min' => 0.5, 'max' => 4,   'step' => 0.05 ],
-                            'letter_spacing' => ['label' => 'Letter Spacing', 'min' => -5,  'max' => 20,  'step' => 0.1  ],
-                            'word_spacing'   => ['label' => 'Word Spacing',   'min' => -10, 'max' => 50,  'step' => 0.5  ],
+                            'size'           => ['label' => 'Size',           'min' => 8,   'max' => 120, 'step' => 1,    'units' => ['px','em','rem','vw','custom']],
+                            'line_height'    => ['label' => 'Line Height',    'min' => 0.5, 'max' => 4,   'step' => 0.05, 'units' => ['','px','em','rem','custom']],
+                            'letter_spacing' => ['label' => 'Letter Spacing', 'min' => -5,  'max' => 20,  'step' => 0.1,  'units' => ['px','em','rem','custom']],
+                            'word_spacing'   => ['label' => 'Word Spacing',   'min' => -10, 'max' => 50,  'step' => 0.5,  'units' => ['px','em','rem','custom']],
                         ];
-                        foreach (['desktop' => 'desk', 'tablet' => 'tab', 'mobile' => 'mob'] as $bp => $bpcls): ?>
+                        $unit_labels = ['' => 'unitless', 'px' => 'px', 'em' => 'em', 'rem' => 'rem', 'vw' => 'vw', 'custom' => '…'];
+                        ?>
+                        <?php foreach (['desktop' => 'desk', 'tablet' => 'tab', 'mobile' => 'mob'] as $bp => $bpcls): ?>
                         <div class="bnp-fmp-bp-panel bnp-fmp-bp-panel--<?php echo $bpcls; ?>" data-bp="<?php echo $bp; ?>" <?php echo $bp !== 'desktop' ? 'style="display:none;"' : ''; ?>>
                             <?php foreach ($bp_field_cfg as $field => $cfg): ?>
                             <div class="bnp-fmp-row">
@@ -450,6 +453,14 @@ function bnp_render_page() {
                                        data-bp="<?php echo $bp; ?>"
                                        data-field="<?php echo $field; ?>"
                                        placeholder="—" spellcheck="false">
+                                <select class="bnp-fmp-unit"
+                                        data-bp="<?php echo $bp; ?>"
+                                        data-field="<?php echo $field; ?>"
+                                        data-default-unit="<?php echo esc_attr($cfg['units'][0]); ?>">
+                                    <?php foreach ($cfg['units'] as $u): ?>
+                                    <option value="<?php echo esc_attr($u); ?>"><?php echo esc_html($unit_labels[$u] ?? $u); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
                                 <input type="range" class="bnp-fmp-slider"
                                        data-bp="<?php echo $bp; ?>"
                                        data-field="<?php echo $field; ?>"

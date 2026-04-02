@@ -243,7 +243,7 @@
         var styleTrig = row.querySelector('[data-field="style"]');
         var transTrig = row.querySelector('[data-field="transform"]');
         var decorTrig = row.querySelector('[data-field="decoration"]');
-        var weightEl  = row.querySelector('[data-field="weight"][data-bp="desktop"]');
+        var weightEl  = row.querySelector('[data-field="weight"][data-bp=""]');
 
         var fontFamily  = (fam && fam !== '—') ? fam : 'inherit';
         var fontStyle   = styleTrig  ? (styleTrig.dataset.value  || '') : '';
@@ -850,7 +850,7 @@
     function buildFontRow(id, d) {
         d = d || {};
         var bpMap   = [{bp:'desktop',cls:'desk'},{bp:'tablet',cls:'tab'},{bp:'mobile',cls:'mob'}];
-        var rFields = ['size','weight','line_height','letter_spacing','word_spacing'];
+        var rFields = ['size','line_height','letter_spacing','word_spacing'];
         var eH = escH(id);
         var ce = 'contenteditable="true" spellcheck="false"';
         var da = 'data-type="font" data-id="' + eH + '"';
@@ -863,10 +863,10 @@
         html += '<td class="col-check"><input type="checkbox" class="bnp-row-check" data-type="font" data-id="' + eH + '"></td>';
         var previewStyle = 'font-family:' + escH(fam || 'inherit') + ';';
         if (d.style      && d.style      !== '—') previewStyle += 'font-style:'      + escH(d.style)      + ';';
-        if (d.desktop && d.desktop.weight && d.desktop.weight !== '—') previewStyle += 'font-weight:'     + escH(d.desktop.weight) + ';';
+        if (d.weight && d.weight !== '—') previewStyle += 'font-weight:' + escH(d.weight) + ';';
         if (d.transform  && d.transform  !== '—') previewStyle += 'text-transform:'  + escH(d.transform)  + ';';
         if (d.decoration && d.decoration !== '—') previewStyle += 'text-decoration:' + escH(d.decoration) + ';';
-        html += '<td style="vertical-align:middle;"><button class="bnp-preview" type="button" title="Click to preview font" style="' + previewStyle + '" data-font-family="' + escH(fam) + '" data-font-label="' + escH(d.label || '') + '" data-font-style="' + escH(d.style || '') + '" data-font-transform="' + escH(d.transform || '') + '" data-font-decoration="' + escH(d.decoration || '') + '" data-font-weight="' + escH((d.desktop && d.desktop.weight) || '') + '" data-font-size="' + escH((d.desktop && d.desktop.size) || '') + '">Aa</button></td>';
+        html += '<td style="vertical-align:middle;"><button class="bnp-preview" type="button" title="Click to preview font" style="' + previewStyle + '" data-font-family="' + escH(fam) + '" data-font-label="' + escH(d.label || '') + '" data-font-style="' + escH(d.style || '') + '" data-font-transform="' + escH(d.transform || '') + '" data-font-decoration="' + escH(d.decoration || '') + '" data-font-weight="' + escH(d.weight || '') + '" data-font-size="' + escH((d.desktop && d.desktop.size) || '') + '">Aa</button></td>';
         html += '<td><span ' + ce + ' ' + da + ' data-field="name" data-bp="">' + escH(d.label || 'New Font Style') + '</span></td>';
         html += '<td class="col-id"><span class="bnp-id">' + eH + '</span></td>';
         html += '<td><span ' + ce + ' ' + da + ' data-field="family" data-bp="" contenteditable="false" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;padding:3px 8px 3px 6px;border:1px solid #dcdcde;border-radius:4px;background:#fafafa;min-width:110px;">' + escH(fam || '—') + '</span></td>';
@@ -880,6 +880,8 @@
             var entry = buildFlatOpts[f].find(function (o) { return o[0] === cur; }) || ['', '\u2014'];
             html += '<td><span class="bnp-select-trigger" ' + da + ' data-field="' + f + '" data-bp="" data-value="' + escH(cur) + '">' + escH(entry[1]) + '</span></td>';
         });
+        // Flat weight (not per-breakpoint)
+        html += '<td><span ' + ce + ' ' + da + ' data-field="weight" data-bp=""' + ec(d.weight) + '>' + escH(fv(d.weight)) + '</span></td>';
         bpMap.forEach(function (b) {
             var bpData = d[b.bp] || {};
             rFields.forEach(function (f) {
@@ -1111,7 +1113,7 @@
                     var famEl = newRow.querySelector('[data-field="family"]');
                     if (famEl) famEl.setAttribute('contenteditable', 'false');
                     var fam = d.family && d.family !== '—' ? d.family : null;
-                    if (fam) updatePreviewCell(newRow, fam);
+                    if (fam) updatePreviewCell(newRow);
                 }
                 applyScreenOpts();
             });
@@ -1292,10 +1294,34 @@
         decoration: { '': '—', 'none': 'None', 'underline': 'Underline', 'overline': 'Overline', 'line-through': 'Line-through' }
     };
 
-    // Append 'px' to a plain number value; pass through if already has a unit or is empty
+    // Append 'px' to a plain number; pass through any value that already has a unit,
+    // is a CSS function (clamp, calc, etc.), or is empty.
     function fmpPx(v) {
         if (!v || v === '—') return '';
-        return isNaN(parseFloat(v)) ? v : parseFloat(v) + 'px';
+        v = v.trim();
+        return /^-?[\d.]+$/.test(v) ? v + 'px' : v;
+    }
+
+    // Parse a stored CSS value (e.g. "16px", "1.5em", "clamp(...)") into
+    // {val, unit} for populating the modal inputs.
+    // defaultUnit is the field's first unit option (e.g. 'px', '' for line-height).
+    function fmpParseValUnit(v, defaultUnit) {
+        defaultUnit = defaultUnit !== undefined ? defaultUnit : 'px';
+        if (!v || v === '—') return { val: '', unit: defaultUnit };
+        v = v.trim();
+        var m = v.match(/^(-?[\d.]+)\s*(px|em|rem|%|vw|vh|ch|ex|pt|cm|mm)$/i);
+        if (m) return { val: m[1], unit: m[2].toLowerCase() };
+        if (/^-?[\d.]+$/.test(v)) return { val: v, unit: defaultUnit };
+        return { val: v, unit: 'custom' };
+    }
+
+    // Combine numeric value + unit into a CSS string stored in fmpState.
+    // unit='' means unitless (used for line-height); unit='custom' means val is a raw CSS expression.
+    function fmpCombineValUnit(val, unit) {
+        val = (val || '').trim();
+        if (!val) return '';
+        if (unit === 'custom' || unit === '') return val;
+        return val + unit;
     }
 
     function fmpApplyToPreview() {
@@ -1309,12 +1335,11 @@
         // Weight is flat (same for all BPs)
         var w = fmpState.weight || '';
         fmpPreview.style.fontWeight     = (w && w !== '—') ? w : '';
-        // Per-BP properties
-        var sz = parseFloat(bpData.size);
-        fmpPreview.style.fontSize       = !isNaN(sz) ? sz + 'px' : '48px';
-        fmpPreview.style.lineHeight     = bpData.line_height    || '';
-        fmpPreview.style.letterSpacing  = fmpPx(bpData.letter_spacing);
-        fmpPreview.style.wordSpacing    = fmpPx(bpData.word_spacing);
+        // Per-BP properties — fmpPx handles px-only numbers, passes everything else through
+        fmpPreview.style.fontSize      = fmpPx(bpData.size) || '48px';
+        fmpPreview.style.lineHeight    = bpData.line_height    || '';
+        fmpPreview.style.letterSpacing = fmpPx(bpData.letter_spacing);
+        fmpPreview.style.wordSpacing   = fmpPx(bpData.word_spacing);
     }
 
     function fmpSetActivePill(field, value) {
@@ -1392,12 +1417,19 @@
             fmpFillSlider(fmpWeightSlider);
         }
 
-        // BP panels
+        // BP panels — populate inputs, unit selects, and sliders
         fmpActiveBp = 'desktop';
         fontModal.querySelectorAll('.bnp-fmp-bp-panel').forEach(function (panel) {
             var bp = panel.dataset.bp;
             panel.querySelectorAll('.bnp-fmp-bp-input').forEach(function (inp) {
-                inp.value = fmpState.bp[bp][inp.dataset.field] || '';
+                var field   = inp.dataset.field;
+                var stored  = fmpState.bp[bp][field] || '';
+                var row     = inp.closest('.bnp-fmp-row');
+                var unitSel = row && row.querySelector('.bnp-fmp-unit');
+                var defUnit = unitSel ? unitSel.dataset.defaultUnit : 'px';
+                var parsed  = fmpParseValUnit(stored, defUnit);
+                inp.value = parsed.val;
+                if (unitSel) unitSel.value = parsed.unit;
                 fmpInputToSlider(inp);
             });
         });
@@ -1439,15 +1471,23 @@
         slider.style.setProperty('--fmp-pct', pct + '%');
     }
 
-    // Sync a text input's numeric value → its sibling slider (no events fired)
+    // Sync a text input's numeric value → its sibling slider (no events fired).
+    // Slider is only enabled when the unit select is 'px'.
     function fmpInputToSlider(inp) {
         var row = inp.closest('.bnp-fmp-row');
         if (!row) return;
-        var sl = row.querySelector('.bnp-fmp-slider');
+        var sl      = row.querySelector('.bnp-fmp-slider');
         if (!sl) return;
-        var n = parseFloat(inp.value);
-        sl.value = isNaN(n) ? sl.min : Math.max(parseFloat(sl.min), Math.min(parseFloat(sl.max), n));
-        fmpFillSlider(sl);
+        var unitSel = row.querySelector('.bnp-fmp-unit');
+        var unit    = unitSel ? unitSel.value : 'px';
+        sl.disabled = (unit !== 'px');
+        if (!sl.disabled) {
+            var n = parseFloat(inp.value);
+            if (!isNaN(n)) {
+                sl.value = Math.max(parseFloat(sl.min), Math.min(parseFloat(sl.max), n));
+            }
+            fmpFillSlider(sl);
+        }
     }
 
     // Sync a slider → its sibling text input (no events fired)
@@ -1538,12 +1578,6 @@
             fontModal.querySelectorAll('.bnp-fmp-bp-panel').forEach(function (p) {
                 p.style.display = p.dataset.bp === bp ? '' : 'none';
             });
-            // Sync preview slider to the new active BP's size
-            var bpSize = parseFloat((fmpState.bp[bp] || {}).size);
-            if (!isNaN(bpSize) && fmpSizeSlider) {
-                fmpSizeSlider.value = Math.max(8, Math.min(120, bpSize));
-                if (fmpSizeVal) fmpSizeVal.textContent = fmpSizeSlider.value + 'px';
-            }
             fmpApplyToPreview();
         });
     }
@@ -1551,45 +1585,53 @@
     // ── BP text inputs + sliders: unified input handler ──
     if (fontModal) {
         fontModal.addEventListener('input', function (e) {
-            // Text input changed → sync sibling slider + state + preview
+            // Text input changed → combine with unit, sync slider, update state + preview
             var inp = e.target.closest('.bnp-fmp-bp-input');
             if (inp) {
-                var bp    = inp.dataset.bp;
-                var field = inp.dataset.field;
-                fmpState.bp[bp][field] = inp.value.trim();
+                var bp      = inp.dataset.bp;
+                var field   = inp.dataset.field;
+                var row     = inp.closest('.bnp-fmp-row');
+                var unitSel = row && row.querySelector('.bnp-fmp-unit');
+                var unit    = unitSel ? unitSel.value : 'px';
+                fmpState.bp[bp][field] = fmpCombineValUnit(inp.value, unit);
                 fmpInputToSlider(inp);
-                if (bp === 'desktop') {
-                    if (field === 'size') {
-                        var sz = parseFloat(inp.value.trim());
-                        if (!isNaN(sz) && fmpSizeSlider) {
-                            fmpSizeSlider.value = Math.max(8, Math.min(120, sz));
-                            if (fmpSizeVal) fmpSizeVal.textContent = fmpSizeSlider.value + 'px';
-                        }
-                    }
-                    if (field === 'weight' || field === 'size') fmpApplyToPreview();
-                }
+                if (bp === fmpActiveBp) fmpApplyToPreview();
                 return;
             }
 
-            // Slider changed → sync sibling input + state + preview
+            // Slider changed → sync sibling input, append its unit, update state + preview
+            // (skip if no data-bp — the flat weight slider is handled separately)
             var sl = e.target.closest('.bnp-fmp-slider');
-            if (sl) {
-                var bp    = sl.dataset.bp;
-                var field = sl.dataset.field;
+            if (sl && sl.dataset.bp) {
+                var bp      = sl.dataset.bp;
+                var field   = sl.dataset.field;
+                var row     = sl.closest('.bnp-fmp-row');
+                var unitSel = row && row.querySelector('.bnp-fmp-unit');
+                var unit    = unitSel ? unitSel.value : 'px';
                 fmpSliderToInput(sl);
-                fmpState.bp[bp][field] = sl.value;
-                if (bp === 'desktop') {
-                    if (field === 'size') {
-                        var sz = parseFloat(sl.value);
-                        if (fmpSizeSlider) {
-                            fmpSizeSlider.value = Math.max(8, Math.min(120, sz));
-                            if (fmpSizeVal) fmpSizeVal.textContent = fmpSizeSlider.value + 'px';
-                        }
-                        fmpApplyToPreview();
-                    }
-                    if (field === 'weight') fmpApplyToPreview();
-                }
+                fmpState.bp[bp][field] = fmpCombineValUnit(sl.value, unit);
+                if (bp === fmpActiveBp) fmpApplyToPreview();
             }
+        });
+
+        // Unit select changed → re-combine state, toggle slider, update preview
+        fontModal.addEventListener('change', function (e) {
+            var unitSel = e.target.closest('.bnp-fmp-unit');
+            if (!unitSel) return;
+            var bp    = unitSel.dataset.bp;
+            var field = unitSel.dataset.field;
+            var unit  = unitSel.value;
+            var row   = unitSel.closest('.bnp-fmp-row');
+            var inp   = row && row.querySelector('.bnp-fmp-bp-input');
+            var sl    = row && row.querySelector('.bnp-fmp-slider');
+            var val   = inp ? inp.value.trim() : '';
+            if (inp) inp.placeholder = (unit === 'custom') ? 'CSS value' : '—';
+            fmpState.bp[bp][field] = fmpCombineValUnit(val, unit);
+            if (sl) {
+                sl.disabled = (unit !== 'px');
+                if (!sl.disabled) fmpFillSlider(sl);
+            }
+            if (bp === fmpActiveBp) fmpApplyToPreview();
         });
     }
 
@@ -1628,9 +1670,18 @@
                 markDirty(trig);
             });
 
-            // Breakpoint fields
+            // Flat weight
+            var wEl = row.querySelector('[data-field="weight"][data-bp=""]');
+            if (wEl) {
+                var wv = fmpState.weight || '';
+                wEl.textContent = wv || '—';
+                wEl.classList.toggle('bnp-val-empty', !wv);
+                markDirty(wEl);
+            }
+
+            // Breakpoint fields (weight is now flat, not per-BP)
             ['desktop', 'tablet', 'mobile'].forEach(function (bp) {
-                ['size', 'weight', 'line_height', 'letter_spacing', 'word_spacing'].forEach(function (f) {
+                ['size', 'line_height', 'letter_spacing', 'word_spacing'].forEach(function (f) {
                     var el = row.querySelector('[data-field="' + f + '"][data-bp="' + bp + '"]');
                     if (!el) return;
                     var v = fmpState.bp[bp][f] || '';

@@ -286,14 +286,27 @@
 .bnp-fmp-bp-panel--tab  .bnp-fmp-input:focus { border-color: var(--bnp-tab-txt);  box-shadow: 0 0 0 2px rgba(26,110,60,.15); }
 .bnp-fmp-bp-panel--mob  .bnp-fmp-input:focus { border-color: var(--bnp-mob-txt);  box-shadow: 0 0 0 2px rgba(122,79,0,.15); }
 
-/* BP field row — label | number input | slider */
+/* BP field row — label | number input | unit select | slider */
 .bnp-fmp-row {
     display: grid;
-    grid-template-columns: 90px 58px 1fr;
+    grid-template-columns: 90px 44px 42px 1fr;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     margin-bottom: 9px;
 }
+.bnp-fmp-unit {
+    width: 100%; height: 28px;
+    padding: 0 2px 0 4px;
+    font-size: 11px; font-family: ui-monospace, monospace;
+    color: var(--bnp-muted);
+    border: 1px solid var(--bnp-border);
+    border-radius: 4px;
+    background: var(--bnp-bg);
+    cursor: pointer;
+    appearance: none; -webkit-appearance: none;
+    text-align: center;
+}
+.bnp-fmp-unit:focus { outline: 2px solid var(--bnp-accent); outline-offset: -1px; }
 .bnp-fmp-row:last-child { margin-bottom: 0; }
 .bnp-fmp-row-label {
     font-size: 12px; color: var(--bnp-muted);
@@ -347,6 +360,9 @@
 
 /* Flat weight slider (accent matches regular controls) */
 #bnp-fmp-weight-slider { accent-color: var(--bnp-accent); }
+
+/* Disabled slider — shown when input has a unit/function value (em, clamp, etc.) */
+.bnp-fmp-slider:disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
 
 /* Footer */
 .bnp-font-modal-footer {
