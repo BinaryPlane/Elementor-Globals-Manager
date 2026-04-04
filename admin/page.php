@@ -480,6 +480,20 @@ function bnp_render_page() {
                 </div><!-- /.bnp-fmp-right -->
             </div><!-- /.bnp-font-modal-body -->
 
+            <!-- Saved settings panel -->
+            <div class="bnp-fmp-saved-wrap">
+                <button class="bnp-fmp-saved-toggle" type="button" id="bnp-fmp-saved-toggle">
+                    <span class="dashicons dashicons-backup"></span>
+                    Currently Saved Values
+                    <span class="bnp-fmp-saved-arrow dashicons dashicons-arrow-down-alt2"></span>
+                </button>
+                <div class="bnp-fmp-saved-panel" id="bnp-fmp-saved-panel">
+                    <div class="bnp-fmp-saved-inner">
+                        <div id="bnp-fmp-saved-content" class="bnp-fmp-saved-content"></div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Footer -->
             <div class="bnp-font-modal-footer">
                 <span class="bnp-fmp-footer-hint">

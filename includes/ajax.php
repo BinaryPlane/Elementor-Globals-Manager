@@ -43,7 +43,13 @@ add_action('wp_ajax_bnp_save_globals', function () {
         foreach (['system_typography', 'custom_typography'] as $group) {
             if (!isset($settings[$group])) continue;
             foreach ($settings[$group] as &$item) {
-                if (($item['_id'] ?? '') === $font_id) $item[$el_key] = $parsed;
+                if (($item['_id'] ?? '') === $font_id) {
+                    $item[$el_key] = $parsed;
+                    // Ensure the CSS-variable gate flag is present on every saved item
+                    if (empty($item['typography_typography'])) {
+                        $item['typography_typography'] = 'custom';
+                    }
+                }
             }
             unset($item);
         }
@@ -141,8 +147,13 @@ add_action('wp_ajax_bnp_add_global', function () {
 
     if ($type === 'font') {
         $settings['custom_typography'][] = [
-            '_id'   => $new_id,
-            'title' => $label ?: 'New Font Style',
+            '_id'                    => $new_id,
+            'title'                  => $label ?: 'New Font Style',
+            // Required: without this Elementor skips CSS-variable output for this item
+            // and the Site Settings popover toggle renders in its inactive state.
+            'typography_typography'  => 'custom',
+            // Elementor's own default; prevents overlap when no size is set yet.
+            'typography_line_height' => [ 'size' => 1.5, 'unit' => 'em' ],
         ];
     } else {
         $settings['custom_colors'][] = [

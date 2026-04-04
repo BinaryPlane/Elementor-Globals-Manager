@@ -305,9 +305,38 @@
         document.execCommand('insertText', false, text.replace(/\n/g, ' '));
     });
 
+    // When the user clicks into an empty "—" cell, clear the placeholder so they
+    // can type straight away.  Keep bnp-val-empty on the element during editing
+    // so styling stays consistent; it is resolved on blur.
+    document.addEventListener('focusin', function (e) {
+        if (e.target.getAttribute('contenteditable') !== 'true') return;
+        var el = e.target;
+        if (el.classList.contains('bnp-val-empty')) {
+            el.textContent = '';
+        }
+    });
+
+    // On blur: restore "—" + bnp-val-empty if nothing was typed; strip the class
+    // when a real value exists.
+    document.addEventListener('focusout', function (e) {
+        if (e.target.getAttribute('contenteditable') !== 'true') return;
+        var el   = e.target;
+        var text = el.textContent.trim();
+        if (!text || text === '—') {
+            el.textContent = '—';
+            el.classList.add('bnp-val-empty');
+        } else {
+            el.classList.remove('bnp-val-empty');
+        }
+    });
+
     document.addEventListener('input', function (e) {
         if (e.target.getAttribute('contenteditable') !== 'true') return;
         var el = e.target;
+        // Remove the empty-placeholder class as soon as the user types something real
+        if (el.textContent.trim()) {
+            el.classList.remove('bnp-val-empty');
+        }
         markDirty(el);
         if (el.dataset.type === 'font' && (el.dataset.field === 'family' || el.dataset.field === 'weight')) {
             var row = el.closest('tr');
@@ -600,7 +629,11 @@
     var activeFontDrop = null;
 
     function closeFontDropdown() {
-        if (activeFontDrop) { activeFontDrop.remove(); activeFontDrop = null; }
+        if (activeFontDrop) {
+            if (activeFontDrop._cleanup) activeFontDrop._cleanup();
+            activeFontDrop.remove();
+            activeFontDrop = null;
+        }
     }
 
     document.addEventListener('click', function (e) {
@@ -617,73 +650,143 @@
         var drop = document.createElement('div');
         drop.className = 'bnp-font-dropdown';
         drop.innerHTML =
-            '<input class="bnp-fd-search" type="text" placeholder="Search all fonts\u2026" autocomplete="off">' +
+            '<input class="bnp-fd-search" type="text" placeholder="Search fonts\u2026" autocomplete="off">' +
             '<div class="bnp-fd-list"></div>';
 
-        var searchInput = drop.querySelector('.bnp-fd-search');
-        var list        = drop.querySelector('.bnp-fd-list');
-
-        var BNP_FD_MAX = 50;
+        var searchInput   = drop.querySelector('.bnp-fd-search');
+        var list          = drop.querySelector('.bnp-fd-list');
+        var CHUNK         = 60;
+        var flatList      = [];
+        var rendered      = 0;
+        var prevObs       = null;
+        var sentinelObs   = null;
         var searchDebounce = null;
 
-        function renderList(query) {
-            var q = query.toLowerCase();
-            list.innerHTML = '';
+        // Clean up observers when dropdown closes
+        drop._cleanup = function () {
+            if (sentinelObs) sentinelObs.disconnect();
+            if (prevObs)     prevObs.disconnect();
+        };
 
-            if (!q) {
-                list.innerHTML = '<div class="bnp-fd-empty">Type to search fonts\u2026</div>';
-                return;
+        // Build a flat [ {type:'header',label} | {type:'font',name} ] array
+        function buildFlat(query) {
+            var q = (query || '').toLowerCase();
+            var out = [];
+            dropdownGroups.forEach(function (g) {
+                var fonts = q
+                    ? g.fonts.filter(function (f) { return f.toLowerCase().indexOf(q) !== -1; })
+                    : g.fonts;
+                if (!fonts.length) return;
+                out.push({ type: 'header', label: g.label });
+                fonts.forEach(function (f) { out.push({ type: 'font', name: f }); });
+            });
+            return out;
+        }
+
+        function makeFontItem(fontName) {
+            var item = document.createElement('div');
+            item.className = 'bnp-fd-item' + (fontName === current ? ' is-active' : '');
+            var prev = document.createElement('span');
+            prev.className    = 'bnp-fd-preview';
+            prev.dataset.font = fontName;
+            prev.style.fontFamily = '\'' + fontName.replace(/'/g, "\\'") + '\'';
+            prev.textContent  = 'Aa';
+            var nm = document.createElement('span');
+            nm.className = 'bnp-fd-name';
+            nm.textContent = fontName;
+            item.appendChild(prev);
+            item.appendChild(nm);
+            item.addEventListener('mousedown', function (e) {
+                e.preventDefault();
+                applyFont(familySpan, fontName);
+                closeFontDropdown();
+            });
+            return item;
+        }
+
+        function renderChunk() {
+            var end  = Math.min(rendered + CHUNK, flatList.length);
+            var frag = document.createDocumentFragment();
+            for (var i = rendered; i < end; i++) {
+                var entry = flatList[i];
+                if (entry.type === 'header') {
+                    var h = document.createElement('div');
+                    h.className   = 'bnp-fd-group-header';
+                    h.textContent = entry.label;
+                    frag.appendChild(h);
+                } else {
+                    frag.appendChild(makeFontItem(entry.name));
+                }
+            }
+            rendered = end;
+            list.appendChild(frag);
+
+            // Register new preview spans with the lazy-load observer
+            if (prevObs) {
+                list.querySelectorAll('.bnp-fd-preview:not([data-fo])').forEach(function (el) {
+                    el.dataset.fo = '1';
+                    prevObs.observe(el);
+                });
             }
 
-            var totalHits = 0;
-            var remaining = BNP_FD_MAX;
-
-            dropdownGroups.forEach(function (group) {
-                if (remaining <= 0) return;
-                var hits = group.fonts.filter(function (f) {
-                    return f.toLowerCase().includes(q);
-                }).slice(0, remaining);
-                if (!hits.length) return;
-
-                totalHits += hits.length;
-                remaining -= hits.length;
-
-                // Group header
-                var header = document.createElement('div');
-                header.className = 'bnp-fd-group-header';
-                header.textContent = group.label;
-                list.appendChild(header);
-
-                hits.forEach(function (font) {
-                    var item = document.createElement('div');
-                    item.className = 'bnp-fd-item' + (font === current ? ' is-active' : '');
-                    item.innerHTML =
-                        '<span class="bnp-fd-preview" style="font-family:\'' + font.replace(/'/g, "\\'") + '\'">Aa</span>' +
-                        '<span class="bnp-fd-name">' + font + '</span>';
-
-                    item.addEventListener('mousedown', function (e) {
-                        e.preventDefault();
-                        applyFont(familySpan, font);
-                        closeFontDropdown();
-                    });
-
-                    list.appendChild(item);
-                });
-            });
-
-            if (!totalHits) {
-                list.innerHTML = '<div class="bnp-fd-empty">No fonts match \u201c' + query + '\u201d</div>';
-            } else {
-                var active = list.querySelector('.is-active');
-                if (active) active.scrollIntoView({ block: 'nearest' });
+            // Replace the scroll sentinel
+            var old = list.querySelector('.bnp-fd-sentinel');
+            if (old) { if (sentinelObs) sentinelObs.unobserve(old); old.remove(); }
+            if (rendered < flatList.length) {
+                var sentinel = document.createElement('div');
+                sentinel.className = 'bnp-fd-sentinel';
+                list.appendChild(sentinel);
+                if (sentinelObs) sentinelObs.observe(sentinel);
             }
         }
 
-        renderList('');
+        function resetList(query) {
+            if (sentinelObs) sentinelObs.disconnect();
+            if (prevObs)     prevObs.disconnect();
+            list.innerHTML = '';
+            rendered = 0;
+            flatList = buildFlat(query);
+
+            if (!flatList.length) {
+                list.innerHTML = '<div class="bnp-fd-empty">No fonts match \u201c' + (query || '') + '\u201d</div>';
+                return;
+            }
+
+            if (window.IntersectionObserver) {
+                // Load Google Font stylesheet when a preview "Aa" span enters the viewport
+                prevObs = new IntersectionObserver(function (entries) {
+                    entries.forEach(function (entry) {
+                        if (!entry.isIntersecting) return;
+                        loadGoogleFont(entry.target.dataset.font);
+                        prevObs.unobserve(entry.target);
+                    });
+                }, { root: list, rootMargin: '120px 0px' });
+
+                // Append next chunk when the sentinel reaches the viewport
+                sentinelObs = new IntersectionObserver(function (entries) {
+                    if (entries[0].isIntersecting) renderChunk();
+                }, { root: list });
+            }
+
+            renderChunk();
+
+            var active = list.querySelector('.is-active');
+            if (active) setTimeout(function () { active.scrollIntoView({ block: 'nearest' }); }, 0);
+        }
 
         searchInput.addEventListener('input', function () {
             clearTimeout(searchDebounce);
-            searchDebounce = setTimeout(function () { renderList(searchInput.value); }, 150);
+            searchDebounce = setTimeout(function () { resetList(searchInput.value.trim()); }, 150);
+        });
+
+        // Scroll fallback for browsers without IntersectionObserver
+        list.addEventListener('scroll', function () {
+            if (window.IntersectionObserver) return;
+            var lr = list.getBoundingClientRect();
+            list.querySelectorAll('.bnp-fd-preview:not([data-fo])').forEach(function (el) {
+                var r = el.getBoundingClientRect();
+                if (r.top < lr.bottom + 120) { el.dataset.fo = '1'; loadGoogleFont(el.dataset.font); }
+            });
         });
 
         document.body.appendChild(drop);
@@ -699,6 +802,9 @@
 
         searchInput.focus();
         activeFontDrop = drop;
+
+        // Show the full browsable list immediately — no typing required
+        resetList('');
     }
 
     function applyFont(familySpan, fontName) {
@@ -1295,6 +1401,7 @@
 
     // Working state for the currently open modal
     var fmpState     = {};
+    var fmpSavedState = null; // snapshot of values at open time (never mutated while modal is open)
     var fmpSourceRow = null;
     var fmpActiveBp  = 'desktop'; // tracks which BP tab is visible
 
@@ -1341,6 +1448,62 @@
         return val + unit;
     }
 
+    // Mark an input as numeric-only (when unit != 'custom') or free-text ('custom').
+    // Call whenever a unit select changes or an input is first populated.
+    function fmpSetInputNumericMode(inp, unit) {
+        if (!inp) return;
+        if (unit === 'custom') {
+            delete inp.dataset.numericOnly;
+            inp.placeholder = 'CSS value';
+        } else {
+            inp.dataset.numericOnly = '1';
+            inp.placeholder = '—';
+        }
+    }
+
+    // Render the saved-state reference panel inside the modal.
+    function fmpRenderSavedPanel() {
+        var content = document.getElementById('bnp-fmp-saved-content');
+        if (!content || !fmpSavedState) return;
+
+        var fieldLabels = { size: 'Size', line_height: 'Line Height', letter_spacing: 'Letter Sp.', word_spacing: 'Word Sp.' };
+        var bps = [
+            { bp: 'desktop', label: 'Desktop', icon: 'dashicons-desktop', cls: 'desk' },
+            { bp: 'tablet',  label: 'Tablet',  icon: 'dashicons-tablet',  cls: 'tab'  },
+            { bp: 'mobile',  label: 'Mobile',  icon: 'dashicons-smartphone', cls: 'mob' },
+        ];
+
+        function savedRow(key, val) {
+            return '<div class="bnp-fmp-saved-row">' +
+                '<span class="bnp-fmp-saved-key">' + escH(key) + '</span>' +
+                '<span class="bnp-fmp-saved-val">' + escH(val || '—') + '</span>' +
+                '</div>';
+        }
+
+        var html = '<div class="bnp-fmp-saved-flat">';
+        html += savedRow('Family',     fmpSavedState.family     || '—');
+        html += savedRow('Style',      fmpFlatLabels.style[fmpSavedState.style]           || fmpSavedState.style      || '—');
+        html += savedRow('Transform',  fmpFlatLabels.transform[fmpSavedState.transform]   || fmpSavedState.transform  || '—');
+        html += savedRow('Decoration', fmpFlatLabels.decoration[fmpSavedState.decoration] || fmpSavedState.decoration || '—');
+        html += savedRow('Weight',     fmpSavedState.weight || '—');
+        html += '</div>';
+
+        html += '<div class="bnp-fmp-saved-bps">';
+        bps.forEach(function (b) {
+            var bpData = fmpSavedState.bp[b.bp] || {};
+            html += '<div class="bnp-fmp-saved-bp bnp-fmp-saved-bp--' + b.cls + '">';
+            html += '<div class="bnp-fmp-saved-bp-head">' +
+                '<span class="dashicons ' + b.icon + '"></span>' + b.label + '</div>';
+            ['size', 'line_height', 'letter_spacing', 'word_spacing'].forEach(function (f) {
+                html += savedRow(fieldLabels[f], bpData[f] || '—');
+            });
+            html += '</div>';
+        });
+        html += '</div>';
+
+        content.innerHTML = html;
+    }
+
     function fmpApplyToPreview() {
         if (!fmpPreview) return;
         var fam    = fmpState.family;
@@ -1368,19 +1531,97 @@
         });
     }
 
-    function fmpShowFamilyList(q) {
+    // ── Modal family virtual-scroll state ──
+    var fmpFlatFontList = [];
+    var fmpFontRendered = 0;
+    var fmpFontPrevObs  = null;
+    var fmpFontSentObs  = null;
+    var FMP_FONT_CHUNK  = 60;
+
+    function fmpRenderFontChunk() {
         if (!fmpFamilyList) return;
-        if (!q) { fmpFamilyList.innerHTML = ''; fmpFamilyList.style.display = 'none'; return; }
-        var ql = q.toLowerCase();
-        var matches = allFontsFlat.filter(function (f) { return f.toLowerCase().indexOf(ql) !== -1; }).slice(0, 40);
-        if (!matches.length) {
-            fmpFamilyList.innerHTML = '<div class="bnp-fmp-fl-empty">No fonts match</div>';
-        } else {
-            fmpFamilyList.innerHTML = matches.map(function (f) {
-                var safe = f.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
-                return '<div class="bnp-fmp-fl-item" data-font="' + safe + '" style="font-family:\'' + safe + '\',sans-serif;">' + safe + '</div>';
-            }).join('');
+        var end  = Math.min(fmpFontRendered + FMP_FONT_CHUNK, fmpFlatFontList.length);
+        var frag = document.createDocumentFragment();
+        for (var i = fmpFontRendered; i < end; i++) {
+            var item = fmpFlatFontList[i];
+            if (item.type === 'header') {
+                var h = document.createElement('div');
+                h.className   = 'bnp-fd-group-header';
+                h.textContent = item.label;
+                frag.appendChild(h);
+            } else {
+                var el = document.createElement('div');
+                el.className       = 'bnp-fmp-fl-item';
+                el.dataset.font    = item.name;
+                el.style.fontFamily = '\'' + item.name.replace(/'/g, "\\'") + '\', sans-serif';
+                el.textContent     = item.name;
+                frag.appendChild(el);
+            }
         }
+        fmpFontRendered = end;
+        fmpFamilyList.appendChild(frag);
+
+        // Wire lazy Google-font loading for new items
+        if (fmpFontPrevObs) {
+            fmpFamilyList.querySelectorAll('.bnp-fmp-fl-item:not([data-fo])').forEach(function (el) {
+                el.dataset.fo = '1';
+                if (el.dataset.font) fmpFontPrevObs.observe(el);
+            });
+        }
+
+        // Replace sentinel
+        var old = fmpFamilyList.querySelector('.bnp-fd-sentinel');
+        if (old) { if (fmpFontSentObs) fmpFontSentObs.unobserve(old); old.remove(); }
+        if (fmpFontRendered < fmpFlatFontList.length) {
+            var sentinel = document.createElement('div');
+            sentinel.className = 'bnp-fd-sentinel';
+            fmpFamilyList.appendChild(sentinel);
+            if (fmpFontSentObs) fmpFontSentObs.observe(sentinel);
+        }
+    }
+
+    function fmpShowFamilyList(query) {
+        if (!fmpFamilyList) return;
+
+        // Tear down previous observers
+        if (fmpFontSentObs) fmpFontSentObs.disconnect();
+        if (fmpFontPrevObs) fmpFontPrevObs.disconnect();
+        fmpFamilyList.innerHTML = '';
+        fmpFontRendered = 0;
+
+        // Build flat list — show everything when query is empty
+        var q = (query || '').toLowerCase();
+        fmpFlatFontList = [];
+        dropdownGroups.forEach(function (g) {
+            var fonts = q
+                ? g.fonts.filter(function (f) { return f.toLowerCase().indexOf(q) !== -1; })
+                : g.fonts;
+            if (!fonts.length) return;
+            fmpFlatFontList.push({ type: 'header', label: g.label });
+            fonts.forEach(function (f) { fmpFlatFontList.push({ type: 'font', name: f }); });
+        });
+
+        if (!fmpFlatFontList.length) {
+            fmpFamilyList.innerHTML = '<div class="bnp-fmp-fl-empty">No fonts match</div>';
+            fmpFamilyList.style.display = 'block';
+            return;
+        }
+
+        if (window.IntersectionObserver) {
+            fmpFontPrevObs = new IntersectionObserver(function (entries) {
+                entries.forEach(function (entry) {
+                    if (!entry.isIntersecting) return;
+                    loadGoogleFont(entry.target.dataset.font);
+                    fmpFontPrevObs.unobserve(entry.target);
+                });
+            }, { root: fmpFamilyList, rootMargin: '120px 0px' });
+
+            fmpFontSentObs = new IntersectionObserver(function (entries) {
+                if (entries[0].isIntersecting) fmpRenderFontChunk();
+            }, { root: fmpFamilyList });
+        }
+
+        fmpRenderFontChunk();
         fmpFamilyList.style.display = 'block';
     }
 
@@ -1418,9 +1659,13 @@
             });
         });
 
+        // Snapshot saved state for the reference panel
+        fmpSavedState = JSON.parse(JSON.stringify(fmpState));
+
         // Populate controls
         if (fmpFamilyInput) fmpFamilyInput.value = fmpState.family;
-        if (fmpFamilyList)  { fmpFamilyList.innerHTML = ''; fmpFamilyList.style.display = 'none'; }
+        // Show the browsable list immediately; filtered to current family if set
+        fmpShowFamilyList(fmpState.family || '');
 
         ['style', 'transform', 'decoration'].forEach(function (field) {
             fmpSetActivePill(field, fmpState[field]);
@@ -1447,6 +1692,7 @@
                 var parsed  = fmpParseValUnit(stored, defUnit);
                 inp.value = parsed.val;
                 if (unitSel) unitSel.value = parsed.unit;
+                fmpSetInputNumericMode(inp, parsed.unit);
                 fmpInputToSlider(inp);
             });
         });
@@ -1466,6 +1712,13 @@
         // Load Google font and apply styles
         if (fmpState.family && googleFontSet[fmpState.family]) loadGoogleFont(fmpState.family);
         fmpApplyToPreview();
+
+        // Render saved-state reference panel and ensure it starts collapsed
+        fmpRenderSavedPanel();
+        var _savedPanel  = document.getElementById('bnp-fmp-saved-panel');
+        var _savedToggle = document.getElementById('bnp-fmp-saved-toggle');
+        if (_savedPanel)  _savedPanel.classList.remove('is-open');
+        if (_savedToggle) _savedToggle.classList.remove('is-open');
 
         fontModal.style.display = 'flex';
         setTimeout(function () { if (fmpPreview) fmpPreview.focus(); }, 80);
@@ -1545,7 +1798,8 @@
             fmpApplyToPreview();
         });
         fmpFamilyInput.addEventListener('focus', function () {
-            if (fmpFamilyInput.value.trim()) fmpShowFamilyList(fmpFamilyInput.value.trim());
+            // Always show the list on focus (full list if input is empty, filtered if not)
+            fmpShowFamilyList(fmpFamilyInput.value.trim());
         });
         fmpFamilyInput.addEventListener('blur', function () {
             setTimeout(function () {
@@ -1565,6 +1819,16 @@
             fmpFamilyList.style.display = 'none';
             if (googleFontSet[f]) loadGoogleFont(f);
             fmpApplyToPreview();
+        });
+
+        // Scroll fallback: load Google Fonts on scroll for browsers without IntersectionObserver
+        fmpFamilyList.addEventListener('scroll', function () {
+            if (window.IntersectionObserver) return;
+            var lr = fmpFamilyList.getBoundingClientRect();
+            fmpFamilyList.querySelectorAll('.bnp-fmp-fl-item:not([data-fo])').forEach(function (el) {
+                var r = el.getBoundingClientRect();
+                if (r.top < lr.bottom + 120) { el.dataset.fo = '1'; loadGoogleFont(el.dataset.font); }
+            });
         });
     }
 
@@ -1605,6 +1869,15 @@
             // Text input changed → combine with unit, sync slider, update state + preview
             var inp = e.target.closest('.bnp-fmp-bp-input');
             if (inp) {
+                // Strip non-numeric characters when in numeric-only mode
+                if (inp.dataset.numericOnly) {
+                    var filtered = inp.value.replace(/[^\d.\-]/g, '');
+                    if (filtered !== inp.value) {
+                        var pos = inp.selectionStart - (inp.value.length - filtered.length);
+                        inp.value = filtered;
+                        try { inp.setSelectionRange(pos, pos); } catch (ex) {}
+                    }
+                }
                 var bp      = inp.dataset.bp;
                 var field   = inp.dataset.field;
                 var row     = inp.closest('.bnp-fmp-row');
@@ -1642,7 +1915,7 @@
             var inp   = row && row.querySelector('.bnp-fmp-bp-input');
             var sl    = row && row.querySelector('.bnp-fmp-slider');
             var val   = inp ? inp.value.trim() : '';
-            if (inp) inp.placeholder = (unit === 'custom') ? 'CSS value' : '—';
+            if (inp) fmpSetInputNumericMode(inp, unit);
             fmpState.bp[bp][field] = fmpCombineValUnit(val, unit);
             if (sl) {
                 sl.disabled = (unit !== 'px');
@@ -1661,6 +1934,30 @@
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape' && fontModal && fontModal.style.display !== 'none') closeFontModal();
     });
+
+    // ── Numeric-only paste guard (strips non-numeric chars on paste into bp inputs) ──
+    if (fontModal) {
+        fontModal.addEventListener('paste', function (e) {
+            var inp = e.target.closest('.bnp-fmp-bp-input');
+            if (!inp || !inp.dataset.numericOnly) return;
+            e.preventDefault();
+            var text = (e.clipboardData || window.clipboardData).getData('text/plain');
+            var stripped = text.replace(/[^\d.\-]/g, '');
+            if (stripped) document.execCommand('insertText', false, stripped);
+        });
+    }
+
+    // ── Saved settings panel toggle ──
+    (function () {
+        var savedToggle = document.getElementById('bnp-fmp-saved-toggle');
+        var savedPanel  = document.getElementById('bnp-fmp-saved-panel');
+        if (!savedToggle || !savedPanel) return;
+        savedToggle.addEventListener('click', function () {
+            var isOpen = savedPanel.classList.contains('is-open');
+            savedPanel.classList.toggle('is-open', !isOpen);
+            savedToggle.classList.toggle('is-open', !isOpen);
+        });
+    })();
 
     // ── Apply: write fmpState back to the row and mark dirty ──
     if (fontModalApply) {

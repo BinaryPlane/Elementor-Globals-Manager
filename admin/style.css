@@ -240,7 +240,7 @@
     border: 1px solid var(--bnp-border);
     border-radius: 6px;
     box-shadow: 0 6px 20px rgba(0,0,0,.13);
-    max-height: 200px; overflow-y: auto;
+    max-height: 260px; overflow-y: auto;
 }
 .bnp-fmp-fl-item {
     padding: 7px 12px; font-size: 14px; cursor: pointer;
@@ -377,6 +377,98 @@
 }
 .bnp-fmp-footer-hint .dashicons { font-size: 14px; width: 14px; height: 14px; color: #c0c4c8; }
 .bnp-fmp-footer-actions { display: flex; gap: 8px; margin-left: auto; }
+
+/* ── Saved settings panel ── */
+.bnp-fmp-saved-wrap {
+    border-top: 1px solid var(--bnp-border);
+    flex-shrink: 0;
+}
+.bnp-fmp-saved-toggle {
+    display: flex; align-items: center; gap: 7px;
+    width: 100%; padding: 10px 22px;
+    background: #f7f8fa; border: none; cursor: pointer;
+    font-size: 12px; font-weight: 600; color: var(--bnp-muted);
+    text-align: left; letter-spacing: .02em; text-transform: uppercase;
+    transition: color .12s, background .12s;
+}
+.bnp-fmp-saved-toggle:hover { background: #f0f2f5; color: var(--bnp-text); }
+.bnp-fmp-saved-toggle .dashicons { font-size: 14px; width: 14px; height: 14px; }
+.bnp-fmp-saved-arrow {
+    margin-left: auto;
+    transition: transform .18s ease;
+}
+.bnp-fmp-saved-toggle.is-open .bnp-fmp-saved-arrow { transform: rotate(180deg); }
+
+/* Grid-trick: animates from height 0 → auto without JS measurement.
+   The panel is always display:grid; the row collapses to 0fr when closed. */
+.bnp-fmp-saved-panel {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 240ms ease-out;
+    border-top: 1px solid transparent;
+}
+.bnp-fmp-saved-panel.is-open {
+    grid-template-rows: 1fr;
+    border-top-color: var(--bnp-border);
+}
+/* Required by the grid trick: immediate child clips overflow during collapse */
+.bnp-fmp-saved-inner {
+    overflow: hidden;
+    min-height: 0;
+}
+.bnp-fmp-saved-content {
+    display: flex; flex-direction: column; gap: 12px;
+    padding: 14px 22px 16px;
+    background: #f7f8fa;
+    max-height: 220px;
+    overflow-y: auto;
+    /* Fade the content in slightly after the panel starts opening */
+    opacity: 0;
+    transition: opacity 180ms ease-out 60ms;
+}
+.bnp-fmp-saved-panel.is-open .bnp-fmp-saved-content {
+    opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+    .bnp-fmp-saved-panel,
+    .bnp-fmp-saved-content {
+        transition: none;
+    }
+}
+.bnp-fmp-saved-flat {
+    display: flex; flex-wrap: wrap; gap: 4px 18px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--bnp-border);
+}
+.bnp-fmp-saved-bps {
+    display: flex; gap: 16px; flex-wrap: wrap;
+}
+.bnp-fmp-saved-bp {
+    flex: 1; min-width: 140px;
+    display: flex; flex-direction: column; gap: 3px;
+}
+.bnp-fmp-saved-bp-head {
+    font-size: 11px; font-weight: 700; margin-bottom: 4px;
+    display: flex; align-items: center; gap: 4px;
+}
+.bnp-fmp-saved-bp--desk .bnp-fmp-saved-bp-head { color: var(--bnp-desk-txt); }
+.bnp-fmp-saved-bp--tab  .bnp-fmp-saved-bp-head { color: var(--bnp-tab-txt); }
+.bnp-fmp-saved-bp--mob  .bnp-fmp-saved-bp-head { color: var(--bnp-mob-txt); }
+.bnp-fmp-saved-bp-head .dashicons { font-size: 12px; width: 12px; height: 12px; }
+.bnp-fmp-saved-row {
+    display: flex; align-items: baseline; gap: 6px;
+    font-size: 11.5px;
+}
+.bnp-fmp-saved-key {
+    color: var(--bnp-muted); white-space: nowrap; min-width: 90px; flex-shrink: 0;
+}
+.bnp-fmp-saved-val {
+    color: var(--bnp-text); font-weight: 500;
+    font-family: ui-monospace, monospace; font-size: 11px;
+}
+
+/* ── Numeric-only input visual cue ── */
+.bnp-fmp-bp-input[data-numeric-only] { font-family: ui-monospace, monospace; }
 
 /* ── Inline editing ── */
 [contenteditable="true"] {
@@ -516,6 +608,8 @@ td.is-dirty [contenteditable="true"] { box-shadow: 0 0 0 1.5px var(--bnp-dirty-b
 .bnp-fd-item.is-active { background: #e8f3fb; font-weight: 600; color: var(--bnp-accent); }
 .bnp-fd-preview { font-size: 18px; line-height: 1; min-width: 28px; }
 .bnp-fd-empty { padding: 12px; font-size: 13px; color: var(--bnp-muted); text-align: center; }
+/* Virtual-scroll sentinel — must have height so IntersectionObserver detects it */
+.bnp-fd-sentinel { height: 1px; }
 
 /* Family cell + Style/Transform/Decoration triggers — shared pill look */
 [data-field="family"],
