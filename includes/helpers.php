@@ -124,7 +124,7 @@ function bnp_parse_elementor_value($field, $raw) {
         return ['size' => '', 'unit' => 'px'];
     }
 
-    if (preg_match('/^([\d.]+)\s*(px|em|rem|vh|vw|%|vmin|vmax)?$/i', $raw, $m)) {
+    if (preg_match('/^(-?[\d.]+)\s*(px|em|rem|vh|vw|%|vmin|vmax)?$/i', $raw, $m)) {
         return ['size' => (float) $m[1], 'unit' => strtolower($m[2] ?: 'px')];
     }
 
